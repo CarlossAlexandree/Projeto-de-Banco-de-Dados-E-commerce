@@ -214,7 +214,7 @@ O banco de dados foi modelado utilizando o MySQL Workbench.
 O diagrama abaixo representa as entidades, atributos, chaves primárias,
 chaves estrangeiras e seus relacionamentos.
 
-![DER do E-commerce](model/ecommerce_DER.png)
+![DER do E-commerce](Projeto Conceitual - Ecommerce_Refinado.png)
 
 
 ---
