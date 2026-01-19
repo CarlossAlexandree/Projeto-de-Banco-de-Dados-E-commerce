@@ -17,7 +17,7 @@ O projeto foi desenvolvido seguindo as boas práticas de modelagem e organizaç�
 * Implementação de **Entrega com status e código de rastreio**
 * Criação de **tabelas associativas** para relacionamentos N:N
 * Persistência de dados com `INSERT INTO`
-* Criação de **queries SQL simples e avançadas** utilizando:
+* Criação de **queries SQL simples ao avançado** capazes de responder perguntas reais do negócio, utilizando cláusulas SQL:
 
   * SELECT
   * WHERE
@@ -25,6 +25,8 @@ O projeto foi desenvolvido seguindo as boas práticas de modelagem e organizaç�
   * ORDER BY
   * GROUP BY
   * HAVING
+  * JOIN
+  * SUBQUERIES
   * Atributos derivados
 
 ---
@@ -148,6 +150,12 @@ CREATE TABLE delivery (
 
 ## 💾 Persistência de Dados (INSERT INTO)
 
+Foram utilizados comandos `INSERT INTO` para popular todas as tabelas do banco de dados, permitindo:
+
+- Testes funcionais das consultas
+- Validação das regras de negócio
+- Simulação de cenários reais de um e-commerce
+
 ```sql
 INSERT INTO client (Fname, Minit, Lname, CPF, Address) VALUES
 ('Carlos','A','Silva','12345678901','Rua A'),
@@ -173,31 +181,36 @@ INSERT INTO productOrder VALUES (1,1,2,'Disponivel');
 
 ## 🔍 Queries SQL – Atendendo às Diretrizes
 
-### Quantos pedidos foram feitos por cada cliente?
+### Quantos pedidos cada cliente realizou?
 
 ```sql
-SELECT c.idClient, c.Fname, COUNT(o.idOrder) AS total_orders
-FROM client c
-JOIN orders o ON c.idClient = o.idOrdersClient
-GROUP BY c.idClient, c.Fname;
+SELECT c.nome, COUNT(p.id_pedido) AS total_pedidos
+FROM cliente c
+JOIN pedido p ON c.id_cliente = p.id_cliente
+GROUP BY c.nome;
 ```
 
-### Algum vendedor também é fornecedor?
+### Clientes fizeram mais de 1 pedido pago?
 
 ```sql
-SELECT s.socialName
-FROM seller s
-JOIN supplier f ON s.CNPJ = f.CNPJ;
+SELECT c.nome, COUNT(p.id_pedido) AS pedidos_pagos
+FROM cliente c
+JOIN pedido p ON c.id_cliente = p.id_cliente
+WHERE p.status = 'PAGO'
+GROUP BY c.nome
+HAVING COUNT(p.id_pedido) > 1;
 ```
 
-### Relação de produtos, fornecedores e estoques
+### Relação fornecedor → produtos → estoque
 
 ```sql
-SELECT p.Pname, f.socialName, ps.quantity
-FROM product p
-JOIN productSeller pv ON p.idProduct = pv.idProduct
-JOIN seller s ON pv.idSeller = s.idSeller
-JOIN productStorage ps ON ps.idProdStorage = 1;
+SELECT f.nome AS fornecedor,
+       pr.nome AS produto,
+       e.quantidade
+FROM fornecedor f
+JOIN produto pr ON f.id_fornecedor = pr.id_fornecedor
+JOIN estoque e ON pr.id_produto = e.id_produto
+ORDER BY e.quantidade DESC;
 ```
 
 ### Fornecedores e seus produtos
@@ -208,17 +221,122 @@ FROM supplier f
 JOIN product p;
 ```
 
+### Fornecedores com mais de um produto cadastrado
+
+```sql
+SELECT f.nome, COUNT(pr.id_produto) AS total_produtos
+FROM fornecedor f
+JOIN produto pr ON f.id_fornecedor = pr.id_fornecedor
+GROUP BY f.nome
+HAVING COUNT(pr.id_produto) > 1;
+```
+
+### Valor médio dos pedidos acima de R$ 500
+
+```sql
+SELECT p.id_pedido,
+       AVG(ip.quantidade * ip.preco_unitario) AS valor_medio
+FROM pedido p
+JOIN item_pedido ip ON p.id_pedido = ip.id_pedido
+GROUP BY p.id_pedido
+HAVING AVG(ip.quantidade * ip.preco_unitario) > 500;
+```
+
+
+
+### Faturamento total por cliente 
+
+```sql
+SELECT c.nome,
+       SUM(ip.quantidade * ip.preco_unitario) AS faturamento_total
+FROM cliente c
+JOIN pedido p ON c.id_cliente = p.id_cliente
+JOIN item_pedido ip ON p.id_pedido = ip.id_pedido
+GROUP BY c.nome
+ORDER BY faturamento_total DESC;
+```
+
+### Produtos com estoque abaixo da média 
+
+```sql
+    SELECT pr.nome, e.quantidade
+FROM produto pr
+JOIN estoque e ON pr.id_produto = e.id_produto
+WHERE e.quantidade < (
+    SELECT AVG(quantidade) FROM estoque
+);
+```
+
+### Pedidos com mais de uma forma de pagamento 
+
+```sql
+    SELECT p.id_pedido, COUNT(pg.id_pagamento) AS qtd_pagamentos
+FROM pedido p
+JOIN pagamento pg ON p.id_pedido = pg.id_pedido
+GROUP BY p.id_pedido
+HAVING COUNT(pg.id_pagamento) > 1;
+```
+
+
+
+
 ## 📊 Diagrama Entidade-Relacionamento (DER)
 
-O banco de dados foi modelado utilizando o MySQL Workbench.
-O diagrama abaixo representa as entidades, atributos, chaves primárias,
-chaves estrangeiras e seus relacionamentos.
+O modelo entidade-relacionamento (DER) foi desenvolvido considerando os seguintes pontos:
 
-![DER do E-commerce](Projeto Conceitual - Ecommerce_Refinado.png)
+### 📌 Regras de Negócio Implementadas
+
+- **Cliente PF e PJ**
+  - Um cliente pode ser **Pessoa Física (PF)** ou **Pessoa Jurídica (PJ)**, mas nunca ambos
+- **Pagamento**
+  - Um pedido pode possuir **mais de uma forma de pagamento**
+- **Entrega**
+  - Cada pedido possui uma entrega com:
+    - Status
+    - Código de rastreio
+- **Relacionamentos**
+  - Cliente → Pedido (1:N)
+  - Pedido → Item do Pedido (1:N)
+  - Produto → Fornecedor (N:1)
+  - Produto → Estoque (1:1)
+  - Pedido → Pagamento (1:N)
+  - Pedido → Entrega (1:1)
+
+<img width="962" height="1334" alt="Projeto Conceitual - Ecommerce_Refinado" src="https://github.com/user-attachments/assets/ec243925-170f-43ac-bd4f-230ee59d004c" />
 
 
+## 🗂 Estrutura do Banco de Dados
+
+### Tabelas Criadas
+
+- `cliente`
+- `cliente_pf`
+- `cliente_pj`
+- `fornecedor`
+- `produto`
+- `estoque`
+- `pedido`
+- `item_pedido`
+- `pagamento`
+- `entrega`
+
+
+Cada tabela foi criada respeitando o princípio da normalização e integridade referencial.
+
+---
+
+## 🛠 Tecnologias Utilizadas
+
+- **MySQL**
+- **MySQL Workbench**
+- **SQL ANSI**
+- **Git e GitHub**
+  
+
+---
 ---
 
 ## 📦 Conclusão
 
 Este projeto contempla **todas as diretrizes propostas**, apresentando um banco de dados funcional, normalizado, com persistência de dados e consultas SQL capazes de responder perguntas reais do negócio. Possuindo estrutura clara, organizada e profissional.
+
